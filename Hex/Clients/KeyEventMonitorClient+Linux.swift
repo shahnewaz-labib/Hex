@@ -28,6 +28,7 @@ struct KeyEventMonitorClient {
   var handleInputEvent: @Sendable (@Sendable @escaping (InputEvent) -> Bool) -> KeyEventMonitorToken = { _ in .noop }
   var startMonitoring: @Sendable () async -> Void = {}
   var stopMonitoring: @Sendable () -> Void = {}
+  var startDaemonMonitoring: @Sendable (_ socketPath: String) async -> Void = { _ in }
 }
 
 extension KeyEventMonitorClient: DependencyKey {
@@ -38,7 +39,8 @@ extension KeyEventMonitorClient: DependencyKey {
       handleKeyEvent: { handler in live.handleKeyEvent(handler) },
       handleInputEvent: { handler in live.handleInputEvent(handler) },
       startMonitoring: { live.startMonitoring() },
-      stopMonitoring: { live.stopMonitoring() }
+      stopMonitoring: { live.stopMonitoring() },
+      startDaemonMonitoring: { path in live.startDaemonMonitoring(socketPath: path) }
     )
   }
 }
@@ -220,7 +222,80 @@ actor KeyEventMonitorClientLive {
       close(fd)
     }
     inputFDs.removeAll()
+    daemonReadTask?.cancel()
+    daemonReadTask = nil
+    if daemonFD >= 0 { close(daemonFD); daemonFD = -1 }
   }
+
+  func startDaemonMonitoring(socketPath: String) {
+    guard !isMonitoring else { return }
+    isMonitoring = true
+    shouldStop = false
+
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard fd >= 0 else {
+      logger.error("Daemon socket create failed")
+      isMonitoring = false
+      return
+    }
+
+    #if os(Linux)
+    var addr = sockaddr_un()
+    addr.sun_family = sa_family_t(AF_UNIX)
+    socketPath.withCString { strcpy(&addr.sun_path.0, $0) }
+
+    let addrPtr = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 } }
+    if connect(fd, addrPtr, socklen_t(MemoryLayout<sockaddr_un>.size)) < 0 {
+      logger.error("Daemon connect failed: \(String(cString: strerror(errno)))")
+      close(fd)
+      isMonitoring = false
+      return
+    }
+    #endif
+
+    daemonFD = fd
+    logger.info("Connected to hotkey daemon at \(socketPath)")
+
+    daemonReadTask = Task { [weak self] in
+      guard let self = self else { return }
+      var buffer = [UInt8](repeating: 0, count: 64)
+      while !self.shouldStop && !Task.isCancelled {
+        let n = read(fd, &buffer, buffer.count)
+        if n > 0 {
+          let cmd = String(bytes: buffer[0..<n], encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          if !cmd.isEmpty {
+            await self.handleDaemonCommand(cmd)
+          }
+        } else if n < 0 && errno != EAGAIN && errno != EWOULDBLOCK {
+          break
+        } else {
+          try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+      }
+      close(fd)
+    }
+  }
+
+  private func handleDaemonCommand(_ cmd: String) async {
+    logger.info("Daemon command: \(cmd)")
+    switch cmd {
+    case "RECORD_START":
+      for handler in cancellations.values {
+        let event = KeyEvent(key: nil, modifiers: Modifiers(modifiers: []))
+        _ = handler(event)
+      }
+    case "RECORD_STOP":
+      break
+    case "RECORD_CANCEL":
+      break
+    default:
+      break
+    }
+  }
+
+  private var daemonFD: Int32 = -1
+  private var daemonReadTask: Task<Void, Never>?
 
   private var cancellations: [UUID: @Sendable (KeyEvent) -> Bool] = [:]
   private var inputCancellations: [UUID: @Sendable (InputEvent) -> Bool] = [:]

@@ -1,0 +1,51 @@
+app-id: com.hex.Hex
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: hex
+finish-args:
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=ipc
+  - --share=network
+  - --filesystem=home
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+modules:
+  - name: whisper-cpp
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=OFF
+    sources:
+      - type: git
+        url: https://github.com/ggerganov/whisper.cpp.git
+        tag: v1.7.4
+        commit: 5cfcbdfc60ea9ea6f984256745b8b84c24376d19
+    post-install:
+      - install -Dm755 bin/whisper-cli /app/bin/whisper-cpp
+      - install -Dm644 include/whisper.h /app/include/whisper.h
+      - install -Dm644 libwhisper.a /app/lib/libwhisper.a
+
+  - name: swift-runtime
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/swift/linux
+      - cp -r /usr/lib/swift/linux/*.so /app/lib/swift/linux/ 2>/dev/null || true
+      - cp -r /usr/lib/swift_static/linux/*.a /app/lib/swift/linux/ 2>/dev/null || true
+    sources: []
+
+  - name: hex
+    buildsystem: simple
+    build-commands:
+      - swift build -c release --static-swift-stdlib
+      - install -Dm755 .build/release/HexLinux /app/bin/hex
+    sources:
+      - type: dir
+        path: ../..
+    build-options:
+      env:
+        - SWIFTENV_ROOT=/app
+        - LD_LIBRARY_PATH=/app/lib

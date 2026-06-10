@@ -21,6 +21,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "hex", targets: ["HexLinux"]),
+        .executable(name: "hex-hotkeyd", targets: ["HexHotkeyDaemon"]),
     ],
     dependencies: [
         .package(path: "HexCore"),
@@ -42,7 +43,16 @@ let package = Package(
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
             ],
-            path: "HexLinux"
+            path: "HexLinux",
+            exclude: ["HotkeyDaemon.swift"]
+        ),
+        .executableTarget(
+            name: "HexHotkeyDaemon",
+            dependencies: [
+                "HexCore",
+                .product(name: "Logging", package: "swift-log"),
+            ],
+            path: "HexHotkeyDaemon"
         ),
     ]
 )
