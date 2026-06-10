@@ -236,14 +236,8 @@ struct HexLinux {
       return handler
     }
 
-    print("""
-    ╔══════════════════════════════════════════╗
-    ║          Hex — Voice to Text             ║
-    ║          Linux Edition                   ║
-    ╚══════════════════════════════════════════╝
-
-    Type 'h' for help.
-    """)
+    let logger = HexLog.app
+    logger.info("Hex Linux starting...")
 
     let store = Store(initialState: LinuxApp.State()) {
       LinuxApp()
@@ -251,182 +245,124 @@ struct HexLinux {
 
     await store.send(.task).finish()
 
-    while true {
-      print("\n> ", terminator: "")
-      fflush(stdout)
-      guard let line = readLine(strippingNewline: true) else { break }
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
+    let server = HexWebServer(port: 8765)
+    do {
+      try await server.start(store: store)
+    } catch {
+      logger.error("Failed to start web server: \(error)")
+      print("ERROR: Could not start web server on port 8765.")
+      print("Is another instance running?")
+      return
+    }
 
-      switch trimmed.lowercased() {
-      case "", "r", "record":
-        await store.send(.toggleRecording)
-        let state = store.state
-        if state.isRecording {
-          print("  [RECORDING] Speak now... Press Enter to stop.")
-        } else if state.isTranscribing {
-          print("  [TRANSCRIBING] Processing audio...")
-        }
+    openBrowser("http://127.0.0.1:8765")
 
-      case "p", "paste":
-        let text = store.state.lastTranscription
-        if !text.isEmpty {
-          await store.send(.pasteTranscription)
-          print("  [PASTED] \(text.prefix(80))...")
-        } else {
-          print("  Nothing to paste. Record something first.")
-        }
+    print("""
+    ╔═══════════════════════════════════════════╗
+    ║           Hex — Voice to Text             ║
+    ║           Linux Edition                   ║
+    ╠═══════════════════════════════════════════╣
+    ║  Web UI: http://127.0.0.1:8765           ║
+    ║                                           ║
+    ║  CLI commands also available here:        ║
+    ║    Enter → record/stop                    ║
+    ║    p     → paste                          ║
+    ║    models → list models                   ║
+    ║    q     → quit                           ║
+    ╚═══════════════════════════════════════════╝
+    """)
 
-      case "models":
-        let models = store.state.availableModels
-        let downloaded = store.state.downloadedModels
-        let registry = GGMLModelManifest.bundled()
+    let readLoop = Task {
+      while true {
+        guard let line = readLine(strippingNewline: true) else { break }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-        if models.isEmpty {
-          print("  No models available. Type 'fetch' to refresh.")
-        } else {
-          print("\n  Available models:\n")
-          for model in models {
-            let entry = registry.first { $0.name == model }
-            let isDownloaded = downloaded.contains(model)
-            let marker = isDownloaded ? "✓" : " "
-            let sizeStr = entry.map { humanReadableSize($0.sizeBytes) } ?? "?"
-            let speedStr = entry.map { "speed:\(stars($0.speedStars))" } ?? ""
-            let accStr = entry.map { "acc:\(stars($0.accuracyStars))" } ?? ""
-            let lang = entry.map { $0.englishOnly ? "EN" : "ML" } ?? "?"
-
-            print("  [\(marker)] \(model)")
-            print("         \(sizeStr)  \(lang)  \(speedStr)  \(accStr)")
+        switch trimmed.lowercased() {
+        case "", "r", "record":
+          await store.send(.toggleRecording)
+          let st = store.state
+          if st.isRecording {
+            print("  [RECORDING] Speak now...")
+          } else if st.isTranscribing {
+            print("  [TRANSCRIBING] Processing...")
           }
-          print("")
+
+        case "p", "paste":
+          let text = store.state.lastTranscription
+          if !text.isEmpty {
+            await store.send(.pasteTranscription)
+            print("  [PASTED]")
+          } else {
+            print("  Nothing to paste.")
+          }
+
+        case "models":
+          let st = store.state
+          let registry = GGMLModelManifest.bundled()
+          for model in st.availableModels {
+            let dl = st.downloadedModels.contains(model) ? "✓" : " "
+            let entry = registry.first { $0.name == model }
+            print("  [\(dl)] \(model)  \(entry.map { humanReadableSize($0.sizeBytes) } ?? "?")")
+          }
+
+        case "fetch":
+          await store.send(.fetchModels)
+          print("  Refreshing models...")
+
+        case let dl where dl.hasPrefix("download"):
+          let parts = dl.components(separatedBy: .whitespaces).dropFirst()
+          if let name = parts.first {
+            print("  Downloading \(name)...")
+            await store.send(.downloadModel(name))
+            while store.state.isDownloading {
+              let pct = Int(store.state.downloadProgress * 100)
+              print("\r  \(progressBar(fraction: store.state.downloadProgress)) \(pct)%", terminator: "")
+              fflush(stdout)
+              try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            print("")
+            if let err = store.state.error { print("  [ERROR] \(err)") }
+            else { print("  [DONE]") }
+          }
+
+        case let del where del.hasPrefix("delete"):
+          let parts = del.components(separatedBy: .whitespaces).dropFirst()
+          if let name = parts.first {
+            await store.send(.deleteModel(name))
+            print("  Deleted \(name)")
+          }
+
+        case "status":
+          let st = store.state
+          print("  Rec:\(st.isRecording) Trans:\(st.isTranscribing) Models:\(st.downloadedModels.count)/\(st.availableModels.count)")
+
+        case "q", "quit", "exit":
+          print("  Shutting down...")
+          break
+
+        case "h", "help":
+          print("  Enter=record, p=paste, models, download <n>, delete <n>, status, q=quit")
+
+        default:
+          print("  Unknown: '\(trimmed)' (h for help)")
         }
-
-      case "fetch":
-        await store.send(.fetchModels)
-        print("  Fetching models...")
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        let state = store.state
-        print("  Found \(state.availableModels.count) models, \(state.downloadedModels.count) downloaded.")
-
-      case let dl where dl.hasPrefix("download"):
-        let parts = dl.components(separatedBy: .whitespaces).dropFirst()
-        guard let modelName = parts.first, !modelName.isEmpty else {
-          print("  Usage: download <model-name>")
-          print("  Example: download ggml-base.en.bin")
-          print("  Use 'models' to see available models.")
-          continue
-        }
-        print("  Downloading \(modelName)...")
-        await store.send(.downloadModel(modelName))
-
-        while store.state.isDownloading {
-          let progress = store.state.downloadProgress
-          let pct = Int(progress * 100)
-          print("\r  \(progressBar(fraction: progress)) \(pct)%", terminator: "")
-          fflush(stdout)
-          try? await Task.sleep(nanoseconds: 500_000_000)
-        }
-        print("")
-
-        let state = store.state
-        if let error = state.error {
-          print("  [ERROR] \(error)")
-        } else {
-          print("  [DONE] Model downloaded: \(modelName)")
-        }
-
-      case let del where del.hasPrefix("delete"):
-        let parts = del.components(separatedBy: .whitespaces).dropFirst()
-        guard let modelName = parts.first, !modelName.isEmpty else {
-          print("  Usage: delete <model-name>")
-          continue
-        }
-        print("  Deleting \(modelName)...")
-        await store.send(.deleteModel(modelName))
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        print("  [DONE]")
-
-      case "status":
-        let state = store.state
-        print("""
-          Recording: \(state.isRecording ? "active" : "idle")
-          Transcribing: \(state.isTranscribing ? "yes" : "no")
-          Models downloaded: \(state.downloadedModels.count)/\(state.availableModels.count)
-          Selected model: \(state.hexSettings.selectedModel)
-          Language: \(state.hexSettings.outputLanguage ?? "auto")
-        """)
-
-      case "lang", "language":
-        let args = trimmed.components(separatedBy: .whitespaces).dropFirst()
-        if let lang = args.first {
-          store.state.$hexSettings.withLock { $0.outputLanguage = lang }
-          print("  Language set to: \(lang)")
-        } else {
-          print("  Usage: lang <code>  (e.g., lang en, lang fr, lang auto)")
-          print("  Current: \(store.state.hexSettings.outputLanguage ?? "auto")")
-        }
-
-      case "model", "select":
-        let args = trimmed.components(separatedBy: .whitespaces).dropFirst()
-        if let model = args.first {
-          store.state.$hexSettings.withLock { $0.selectedModel = model }
-          print("  Selected model: \(model)")
-        } else {
-          print("  Usage: model <model-name>")
-          print("  Current: \(store.state.hexSettings.selectedModel)")
-        }
-
-      case "q", "quit", "exit":
-        await store.send(.quit)
-        break
-
-      case "h", "help":
-        print("""
-
-          Commands:
-          ─────────────────────────────────────────
-          Enter / r      Start/stop recording
-          p              Paste last transcription
-          models         List available models
-          fetch          Refresh model list
-          download <n>   Download a model by name
-          delete <n>     Delete a downloaded model
-          model <n>      Select model for transcription
-          lang <code>    Set output language (en, fr, auto, etc.)
-          status         Show current state
-          q / quit       Exit
-          h / help       Show this help
-
-          Quick start:
-          1. models          (view available)
-          2. download ggml-tiny.en.bin   (smallest, fastest)
-          3. Press Enter to record, Enter again to stop
-          4. p to paste the result
-        """)
-
-      default:
-        print("  Unknown: '\(trimmed)'. Type 'h' for help.")
-      }
-
-      if !store.state.lastTranscription.isEmpty && !store.state.isRecording && !store.state.isTranscribing {
-        let text = store.state.lastTranscription
-
-        print("""
-
-        ┌\(String(repeating: "─", count: min(text.count + 2, 72)))┐
-        │ \(text.prefix(70)) │
-        └\(String(repeating: "─", count: min(text.count + 2, 72)))┘
-
-        Press 'p' to paste, Enter to record again.
-        """)
-      }
-
-      if let error = store.state.error, !store.state.isDownloading {
-        print("  [ERROR] \(error)")
-        store.state.error = nil
       }
     }
 
-    print("\nGoodbye!")
+    let _ = await readLoop.result
+
+    await server.stop()
+    logger.info("Hex Linux exiting.")
+    print("Goodbye!")
+  }
+
+  static func openBrowser(_ url: String) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["xdg-open", url]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try? process.run()
   }
 }
 #endif

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Hex
+Comment=On-device voice-to-text
+Exec=hex
+Type=Application
+Categories=Utility;Office;
+Keywords=voice;transcription;dictation;speech-to-text;
+Terminal=true
+StartupNotify=false

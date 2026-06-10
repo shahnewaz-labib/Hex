@@ -11,6 +11,7 @@
 //   - xdotool      (apt install xdotool)
 //   - xclip        (apt install xclip)
 //   - pulseaudio   (apt install pulseaudio-utils, for paplay)
+//   - xdg-utils    (apt install xdg-utils, for xdg-open)
 import PackageDescription
 
 let package = Package(
@@ -26,6 +27,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.18.0"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.11.0"),
         .package(url: "https://github.com/apple/swift-log", from: "1.9.1"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
     ],
     targets: [
         .executableTarget(
@@ -36,6 +38,9 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "NIO", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
             ],
             path: "HexLinux"
         ),
