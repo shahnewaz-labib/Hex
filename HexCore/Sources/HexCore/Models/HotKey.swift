@@ -4,8 +4,11 @@
 //
 //  Created by Kit Langton on 1/26/25.
 //
+#if os(macOS)
 import Cocoa
 import Sauce
+#endif
+import Foundation
 
 public struct Modifier: Identifiable, Codable, Equatable, Hashable, Comparable, Sendable {
   public enum Kind: String, Codable, CaseIterable, Comparable, Sendable {
@@ -248,6 +251,7 @@ public struct Modifiers: Codable, Equatable, ExpressibleByArrayLiteral, Sendable
     Modifiers(modifiers: modifiers.filter { $0.kind != kind })
   }
 
+#if os(macOS)
   public static func from(cocoa: NSEvent.ModifierFlags) -> Self {
     var modifiers: Set<Modifier> = []
     if cocoa.contains(.option) {
@@ -298,8 +302,10 @@ public struct Modifiers: Codable, Equatable, ExpressibleByArrayLiteral, Sendable
 
     return .init(modifiers: modifiers)
   }
+#endif
 }
 
+#if os(macOS)
 private enum DeviceModifierMask {
   static let leftControl: UInt64 = 0x00000001
   static let leftShift: UInt64 = 0x00000002
@@ -310,65 +316,14 @@ private enum DeviceModifierMask {
   static let rightOption: UInt64 = 0x00000040
   static let rightControl: UInt64 = 0x00002000
 }
+#endif
 
 public struct HotKey: Codable, Equatable, Sendable {
   public var key: Key?
   public var modifiers: Modifiers
 
-  // Public memberwise initializer so external modules can construct HotKey
   public init(key: Key?, modifiers: Modifiers) {
     self.key = key
     self.modifiers = modifiers
-  }
-}
-
-extension Key {
-  public var toString: String {
-    switch self {
-    case .escape:
-      return "⎋"
-    case .space:
-      return "␣"
-    case .zero:
-      return "0"
-    case .one:
-      return "1"
-    case .two:
-      return "2"
-    case .three:
-      return "3"
-    case .four:
-      return "4"
-    case .five:
-      return "5"
-    case .six:
-      return "6"
-    case .seven:
-      return "7"
-    case .eight:
-      return "8"
-    case .nine:
-      return "9"
-    case .period:
-      return "."
-    case .comma:
-      return ","
-    case .slash:
-      return "/"
-    case .quote:
-      return "\""
-    case .backslash:
-      return "\\"
-    case .leftArrow:
-      return "←"
-    case .rightArrow:
-      return "→"
-    case .upArrow:
-      return "↑"
-    case .downArrow:
-      return "↓"
-    default:
-      return rawValue.uppercased()
-    }
   }
 }

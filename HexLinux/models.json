@@ -1,0 +1,42 @@
+[
+  {
+    "displayName": "Whisper Tiny (GGML)",
+    "internalName": "ggml-tiny.en.bin",
+    "size": "English",
+    "accuracyStars": 2,
+    "speedStars": 5,
+    "storageSize": "75MB"
+  },
+  {
+    "displayName": "Whisper Base (GGML)",
+    "internalName": "ggml-base.en.bin",
+    "size": "English",
+    "accuracyStars": 3,
+    "speedStars": 4,
+    "storageSize": "142MB"
+  },
+  {
+    "displayName": "Whisper Small (GGML)",
+    "internalName": "ggml-small.en.bin",
+    "size": "English",
+    "accuracyStars": 3,
+    "speedStars": 3,
+    "storageSize": "466MB"
+  },
+  {
+    "displayName": "Whisper Medium (GGML)",
+    "internalName": "ggml-medium.en.bin",
+    "size": "English",
+    "accuracyStars": 4,
+    "speedStars": 2,
+    "storageSize": "1.5GB"
+  },
+  {
+    "displayName": "Whisper Large v3 (GGML)",
+    "internalName": "ggml-large-v3.bin",
+    "size": "Multilingual",
+    "accuracyStars": 5,
+    "speedStars": 1,
+    "storageSize": "2.9GB"
+  }
+]

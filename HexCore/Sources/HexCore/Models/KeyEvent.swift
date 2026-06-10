@@ -5,7 +5,7 @@
 //  Created by Kit Langton on 1/28/25.
 //
 
-import Sauce
+import Foundation
 
 public enum InputEvent {
     case keyboard(KeyEvent)

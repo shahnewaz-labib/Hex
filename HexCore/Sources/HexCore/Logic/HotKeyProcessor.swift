@@ -6,7 +6,6 @@
 //
 import Dependencies
 import Foundation
-import SwiftUI
 
 private let hotKeyLogger = HexLog.hotKey
 

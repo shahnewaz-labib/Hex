@@ -1,3 +1,4 @@
+#if os(macOS)
 @preconcurrency import AppKit
 import AVFoundation
 import CoreGraphics
@@ -26,18 +27,12 @@ extension PermissionClient: DependencyKey {
   }
 }
 
-/// Live implementation of the PermissionClient.
-///
-/// This actor manages permission checking, requesting, and app activation monitoring.
-/// It uses NotificationCenter to observe app lifecycle events and provides an AsyncStream
-/// for reactive permission updates.
 actor PermissionClientLive {
   private let (activationStream, activationContinuation) = AsyncStream<AppActivation>.makeStream()
   private nonisolated(unsafe) var observations: [Any] = []
 
   init() {
     logger.debug("Initializing PermissionClient, setting up app activation observers")
-    // Subscribe to app activation notifications
     let didBecomeActiveObserver = NotificationCenter.default.addObserver(
       forName: NSApplication.didBecomeActiveNotification,
       object: nil,
@@ -66,8 +61,6 @@ actor PermissionClientLive {
   deinit {
     observations.forEach { NotificationCenter.default.removeObserver($0) }
   }
-
-  // MARK: - Microphone Permissions
 
   func microphoneStatus() async -> PermissionStatus {
     let status = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -106,10 +99,7 @@ actor PermissionClientLive {
     }
   }
 
-  // MARK: - Accessibility Permissions
-
   nonisolated func accessibilityStatus() -> PermissionStatus {
-    // Check without prompting (kAXTrustedCheckOptionPrompt: false)
     let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary
     let result = AXIsProcessTrustedWithOptions(options) ? PermissionStatus.granted : .denied
     logger.info("Accessibility status: \(String(describing: result))")
@@ -125,13 +115,10 @@ actor PermissionClientLive {
 
   func requestAccessibility() async {
     logger.info("Requesting accessibility permission...")
-    // First, trigger the system prompt (on main actor for safety)
     await MainActor.run {
       let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
       _ = AXIsProcessTrustedWithOptions(options)
     }
-
-    // Also open System Settings (the prompt alone is insufficient on modern macOS)
     await openAccessibilitySettings()
   }
 
@@ -172,8 +159,6 @@ actor PermissionClientLive {
     }
   }
 
-  // MARK: - Reactive Monitoring
-
   nonisolated func observeAppActivation() -> AsyncStream<AppActivation> {
     activationStream
   }
@@ -189,3 +174,83 @@ actor PermissionClientLive {
     }
   }
 }
+#else
+import Dependencies
+import Foundation
+
+private let logger = HexLog.permissions
+
+extension PermissionClient: DependencyKey {
+  public static var liveValue: Self {
+    let live = PermissionClientLive()
+    return Self(
+      microphoneStatus: { await live.microphoneStatus() },
+      accessibilityStatus: { live.accessibilityStatus() },
+      inputMonitoringStatus: { live.inputMonitoringStatus() },
+      requestMicrophone: { await live.requestMicrophone() },
+      requestAccessibility: { await live.requestAccessibility() },
+      requestInputMonitoring: { await live.requestInputMonitoring() },
+      openMicrophoneSettings: { await live.openMicrophoneSettings() },
+      openAccessibilitySettings: { await live.openAccessibilitySettings() },
+      openInputMonitoringSettings: { await live.openInputMonitoringSettings() },
+      observeAppActivation: { live.observeAppActivation() }
+    )
+  }
+}
+
+/// Linux implementation: most permissions are essentially always granted.
+/// PulseAudio/PipeWire handles mic access at the audio system level.
+/// Global hotkey access is determined by input group membership or Wayland portal.
+actor PermissionClientLive {
+  private let (activationStream, activationContinuation) = AsyncStream<AppActivation>.makeStream()
+
+  init() {
+    logger.debug("Initializing Linux PermissionClient")
+  }
+
+  func microphoneStatus() async -> PermissionStatus {
+    logger.info("Microphone status: granted (Linux PulseAudio/PipeWire)")
+    return .granted
+  }
+
+  func requestMicrophone() async -> Bool {
+    logger.info("Microphone permission: granted (no prompt on Linux)")
+    return true
+  }
+
+  func openMicrophoneSettings() async {
+    logger.info("Open microphone settings: no-op on Linux")
+  }
+
+  nonisolated func accessibilityStatus() -> PermissionStatus {
+    logger.info("Accessibility status: granted (no prompt on Linux)")
+    return .granted
+  }
+
+  nonisolated func inputMonitoringStatus() -> PermissionStatus {
+    logger.info("Input monitoring status: granted on Linux")
+    return .granted
+  }
+
+  func requestAccessibility() async {
+    logger.info("Accessibility permission: granted (no prompt on Linux)")
+  }
+
+  func requestInputMonitoring() async -> Bool {
+    logger.info("Input monitoring permission: granted on Linux")
+    return true
+  }
+
+  func openAccessibilitySettings() async {
+    logger.info("Open accessibility settings: no-op on Linux")
+  }
+
+  func openInputMonitoringSettings() async {
+    logger.info("Open input monitoring settings: no-op on Linux")
+  }
+
+  nonisolated func observeAppActivation() -> AsyncStream<AppActivation> {
+    activationStream
+  }
+}
+#endif

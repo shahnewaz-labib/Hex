@@ -5,11 +5,16 @@
 //  Created by Kit Langton on 1/26/25.
 //
 
+#if os(macOS)
 import AppKit
+#endif
 import ComposableArchitecture
 import Dependencies
+import Foundation
 import HexCore
+#if os(macOS)
 import SwiftUI
+#endif
 
 @Reducer
 struct AppFeature {
@@ -97,10 +102,12 @@ struct AppFeature {
         state.activeTab = .settings
         state.settings.shouldFlashModelSection = true
         return .run { send in
+#if os(macOS)
           await MainActor.run {
             HexLog.app.notice("Activating app for model missing")
             NSApplication.shared.activate(ignoringOtherApps: true)
           }
+#endif
           try? await Task.sleep(for: .seconds(2))
           await send(.settings(.set(\.shouldFlashModelSection, false)))
         }
@@ -252,6 +259,7 @@ struct AppFeature {
 
 }
 
+#if os(macOS)
 struct AppView: View {
   @Bindable var store: StoreOf<AppFeature>
   @State private var columnVisibility = NavigationSplitViewVisibility.automatic
@@ -315,3 +323,4 @@ struct AppView: View {
     .enableInjection()
   }
 }
+#endif

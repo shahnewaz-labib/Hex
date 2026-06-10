@@ -1,7 +1,10 @@
+#if canImport(AVFoundation)
 import AVFoundation
 import Foundation
 import HexCore
+#if os(macOS)
 import os.log
+#endif
 
 struct ParakeetClipPreparationResult {
   let url: URL
@@ -116,3 +119,36 @@ enum ParakeetClipPreparer {
     return base.appendingPathComponent("\(stem)-parakeet-padded.wav")
   }
 }
+
+#else
+
+import Foundation
+
+struct ParakeetClipPreparationResult {
+  let url: URL
+  private let cleanupURL: URL?
+
+  init(url: URL, cleanupURL: URL?) {
+    self.url = url
+    self.cleanupURL = cleanupURL
+  }
+
+  func cleanup() {
+    guard let cleanupURL else { return }
+    try? FileManager.default.removeItem(at: cleanupURL)
+  }
+}
+
+enum ParakeetClipPreparer {
+  static let defaultMinimumDuration: TimeInterval = 1.5
+
+  static func ensureMinimumDuration(
+    url: URL,
+    minimumDuration: TimeInterval = defaultMinimumDuration,
+    logger: HexLog = HexLog.parakeet
+  ) -> ParakeetClipPreparationResult {
+    ParakeetClipPreparationResult(url: url, cleanupURL: nil)
+  }
+}
+
+#endif

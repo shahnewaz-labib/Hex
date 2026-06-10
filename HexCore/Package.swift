@@ -3,7 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "HexCore",
-    platforms: [.macOS(.v14)],
+    platforms: [
+        .macOS(.v14),
+    ],
     products: [
         .library(name: "HexCore", targets: ["HexCore"]),
     ],
@@ -13,19 +15,19 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log", from: "1.9.1"),
     ],
     targets: [
-	    .target(
-	        name: "HexCore",
-	        dependencies: [
-	            "Sauce",
-	            .product(name: "Dependencies", package: "swift-dependencies"),
-	            .product(name: "DependenciesMacros", package: "swift-dependencies"),
-	            .product(name: "Logging", package: "swift-log"),
-	        ],
-	        path: "Sources/HexCore",
-	        linkerSettings: [
-	            .linkedFramework("IOKit")
-	        ]
-	    ),
+        .target(
+            name: "HexCore",
+            dependencies: [
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
+                .product(name: "Logging", package: "swift-log"),
+                .target(name: "Sauce", condition: .when(platforms: [.macOS])),
+            ],
+            path: "Sources/HexCore",
+            linkerSettings: [
+                .linkedFramework("IOKit", .when(platforms: [.macOS])),
+            ]
+        ),
         .testTarget(
             name: "HexCoreTests",
             dependencies: ["HexCore"],
