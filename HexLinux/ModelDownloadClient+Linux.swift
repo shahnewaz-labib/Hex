@@ -41,15 +41,25 @@ actor ModelDownloadClientLive {
   private let registry = GGMLModelManifest.loadFromDisk()
 
   func downloadModel(_ modelName: String, progress: @escaping (Double) -> Void) async throws -> URL {
-    guard let entry = registry.first(where: { $0.name == modelName }) else {
+    let resolvedName: String
+    if registry.contains(where: { $0.name == modelName }) {
+      resolvedName = modelName
+    } else if let mapped = ModelMigration.mapToGGML(modelName) {
+      resolvedName = mapped
+      modelsLogger.info("Auto-mapped download: '\(modelName)' -> '\(mapped)'")
+    } else {
+      throw ModelDownloadError.modelNotFound(modelName)
+    }
+
+    guard let entry = registry.first(where: { $0.name == resolvedName }) else {
       throw ModelDownloadError.modelNotFound(modelName)
     }
 
     let modelsDir = try URL.hexModelsDirectory
-    let destURL = modelsDir.appendingPathComponent(modelName)
+    let destURL = modelsDir.appendingPathComponent(resolvedName)
     let partialURL = destURL.appendingPathExtension("part")
 
-    modelsLogger.info("Downloading \(modelName) from \(entry.url)")
+    modelsLogger.info("Downloading \(resolvedName) from \(entry.url)")
 
     if FileManager.default.fileExists(atPath: destURL.path) {
       modelsLogger.info("Model already fully downloaded: \(modelName)")
@@ -134,8 +144,18 @@ actor ModelDownloadClientLive {
 
   func isModelDownloaded(_ modelName: String) -> Bool {
     guard let modelsDir = try? URL.hexModelsDirectory else { return false }
-    let modelURL = modelsDir.appendingPathComponent(modelName)
-    return FileManager.default.fileExists(atPath: modelURL.path)
+
+    if FileManager.default.fileExists(atPath: modelsDir.appendingPathComponent(modelName).path) {
+      return true
+    }
+
+    if let mapped = ModelMigration.mapToGGML(modelName) {
+      if FileManager.default.fileExists(atPath: modelsDir.appendingPathComponent(mapped).path) {
+        return true
+      }
+    }
+
+    return false
   }
 
   func getAvailableModels() -> [String] {

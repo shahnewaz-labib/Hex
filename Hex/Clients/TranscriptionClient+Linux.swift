@@ -66,14 +66,22 @@ actor TranscriptionClientLive {
   }
 
   func transcribe(audioURL: URL, language: String?, modelPath: String?) async throws -> String {
-    let model = modelPath ?? defaultModelPath()
+    var model = modelPath ?? defaultModelPath()
+    let modelsDir = (try? URL.hexModelsDirectory.path) ?? ""
 
-    let resolvedModelPath: String
+    var resolvedModelPath: String
     if model.hasPrefix("/") || model.hasPrefix("~") {
       resolvedModelPath = (model as NSString).expandingTildeInPath
     } else {
-      let modelsDir = (try? URL.hexModelsDirectory.path) ?? ""
       resolvedModelPath = (modelsDir as NSString).appendingPathComponent(model)
+    }
+
+    if !FileManager.default.fileExists(atPath: resolvedModelPath) {
+      if let mapped = ModelMigration.mapToGGML(model) {
+        model = mapped
+        resolvedModelPath = (modelsDir as NSString).appendingPathComponent(mapped)
+        transcriptionLogger.notice("Auto-mapped model: '\(modelPath ?? "")' -> '\(mapped)'")
+      }
     }
 
     guard FileManager.default.fileExists(atPath: resolvedModelPath) else {

@@ -48,7 +48,19 @@ struct LinuxApp {
     Reduce { state, action in
       switch action {
       case .task:
-        return .send(.fetchModels)
+        return .run { send in
+          store.withState { state in
+            var settings = state.hexSettings
+            let oldModel = settings.selectedModel
+            ModelMigration.migrateSettings(&settings)
+            if settings.selectedModel != oldModel {
+              let logger = HexLog.app
+              logger.notice("Migrated model: '\(oldModel)' -> '\(settings.selectedModel)'")
+            }
+            state.$hexSettings.withLock { $0 = settings }
+          }
+          await send(.fetchModels)
+        }
 
       case .toggleRecording:
         if state.isRecording {
