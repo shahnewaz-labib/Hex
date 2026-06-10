@@ -6,12 +6,17 @@ import Foundation
 import HexCore
 
 private let transcriptionLogger = HexLog.transcription
+private let modelsLogger = HexLog.models
 
 @DependencyClient
 struct TranscriptionClient {
   var transcribe: @Sendable (_ audioURL: URL, _ language: String?, _ modelPath: String?) async throws -> String
+  var downloadModel: @Sendable (_ modelName: String, _ progress: @escaping (Double) -> Void) async throws -> Void
+  var deleteModel: @Sendable (_ modelName: String) async throws -> Void
+  var isModelDownloaded: @Sendable (_ modelName: String) async -> Bool
   var loadModel: @Sendable (_ modelPath: String) async throws -> Void
   var getAvailableModels: @Sendable () async -> [String]
+  var getRecommendedModels: @Sendable () async throws -> [String]
   var defaultModelPath: @Sendable () -> String
 }
 
@@ -20,8 +25,12 @@ extension TranscriptionClient: DependencyKey {
     let live = TranscriptionClientLive()
     return .init(
       transcribe: { url, lang, path in try await live.transcribe(audioURL: url, language: lang, modelPath: path) },
+      downloadModel: { name, progress in try await live.downloadModel(name, progress: progress) },
+      deleteModel: { name in try await live.deleteModel(name) },
+      isModelDownloaded: { name in await live.isModelDownloaded(name) },
       loadModel: { path in try await live.loadModel(modelPath: path) },
       getAvailableModels: { await live.getAvailableModels() },
+      getRecommendedModels: { try await live.getRecommendedModels() },
       defaultModelPath: { live.defaultModelPath() }
     )
   }
@@ -29,8 +38,12 @@ extension TranscriptionClient: DependencyKey {
   static var testValue: Self {
     .init(
       transcribe: { _, _, _ in "Test transcription" },
+      downloadModel: { _, _ in },
+      deleteModel: { _ in },
+      isModelDownloaded: { _ in false },
       loadModel: { _ in },
       getAvailableModels: { [] },
+      getRecommendedModels: { [] },
       defaultModelPath: { "" }
     )
   }
@@ -46,6 +59,7 @@ extension DependencyValues {
 actor TranscriptionClientLive {
   private var loadedModelPath: String?
   private let whisperBinPath: String
+  @Dependency(\.modelDownload) var modelDownload
 
   init(whisperBinPath: String = "whisper-cpp") {
     self.whisperBinPath = whisperBinPath
@@ -112,6 +126,21 @@ actor TranscriptionClientLive {
     }
   }
 
+  func downloadModel(_ modelName: String, progress: @escaping (Double) -> Void) async throws {
+    modelsLogger.info("Downloading model: \(modelName)")
+    _ = try await modelDownload.downloadModel(modelName, progress)
+    modelsLogger.info("Model download complete: \(modelName)")
+  }
+
+  func deleteModel(_ modelName: String) async throws {
+    modelsLogger.info("Deleting model: \(modelName)")
+    try await modelDownload.deleteModel(modelName)
+  }
+
+  func isModelDownloaded(_ modelName: String) async -> Bool {
+    modelDownload.isModelDownloaded(modelName)
+  }
+
   func loadModel(modelPath: String) async throws {
     let resolvedPath: String
     if modelPath.hasPrefix("/") || modelPath.hasPrefix("~") {
@@ -143,7 +172,17 @@ actor TranscriptionClientLive {
       transcriptionLogger.error("Failed to enumerate models: \(error)")
     }
 
+    if models.isEmpty {
+      let registry = GGMLModelManifest.bundled()
+      models = registry.map(\.name)
+    }
+
     return models.sorted()
+  }
+
+  func getRecommendedModels() async throws -> [String] {
+    let registry = GGMLModelManifest.bundled()
+    return ["ggml-tiny.en.bin", "ggml-base.en.bin", "ggml-small.en.bin"]
   }
 
   func defaultModelPath() -> String {

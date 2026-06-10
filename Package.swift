@@ -37,8 +37,7 @@ let package = Package(
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Logging", package: "swift-log"),
             ],
-            path: "HexLinux",
-            sources: ["."]
+            path: "HexLinux"
         ),
     ]
 )
