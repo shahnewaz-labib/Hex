@@ -36,6 +36,11 @@ public extension URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
+    static var documentsDirectory: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0]
+    }
+
     static func hexMigratedFileURL(named fileName: String) -> URL {
         let newURL = (try? hexApplicationSupport.appending(component: fileName))
             ?? documentsDirectory.appending(component: fileName)

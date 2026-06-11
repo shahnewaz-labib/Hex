@@ -48,6 +48,7 @@ actor SleepManagementClientLive {
 }
 #else
 import Dependencies
+import Foundation
 
 extension SleepManagementClient: DependencyKey {
   public static var liveValue: Self {

@@ -44,7 +44,7 @@ let package = Package(
                 .product(name: "NIOPosix", package: "swift-nio"),
             ],
             path: "HexLinux",
-            exclude: ["HotkeyDaemon.swift"]
+            exclude: ["HotkeyDaemon.swift", "models.json", "hex.desktop"]
         ),
         .executableTarget(
             name: "HexHotkeyDaemon",
