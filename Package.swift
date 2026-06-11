@@ -25,7 +25,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "HexCore"),
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.18.0"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.11.0"),
         .package(url: "https://github.com/apple/swift-log", from: "1.9.1"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
@@ -35,7 +34,6 @@ let package = Package(
             name: "HexLinux",
             dependencies: [
                 "HexCore",
-                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Logging", package: "swift-log"),

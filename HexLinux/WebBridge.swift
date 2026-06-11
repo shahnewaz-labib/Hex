@@ -3,43 +3,36 @@ import Foundation
 import HexCore
 
 enum WebBridge {
-  static func statusJSON(from store: StoreOf<LinuxApp>) -> String {
-    let state = store.state
+  static func statusJSON(_ app: AppModel) -> String {
     let registry = GGMLModelManifest.bundled()
-
-    let modelEntry = registry.first { $0.name == state.hexSettings.selectedModel }
+    let entry = registry.first { $0.name == app.settings.selectedModel }
 
     let dict: [String: Any] = [
-      "isRecording": state.isRecording,
-      "isTranscribing": state.isTranscribing,
-      "isDownloading": state.isDownloading,
-      "downloadProgress": state.downloadProgress,
-      "lastTranscription": state.lastTranscription,
-      "error": state.error as Any,
-      "selectedModel": state.hexSettings.selectedModel,
-      "selectedModelDisplayName": modelEntry?.displayName ?? state.hexSettings.selectedModel,
-      "outputLanguage": state.hexSettings.outputLanguage as Any,
-      "modelsDownloaded": state.downloadedModels.count,
-      "modelsAvailable": state.availableModels.count,
+      "isRecording": app.isRecording,
+      "isTranscribing": app.isTranscribing,
+      "isDownloading": app.isDownloading,
+      "downloadProgress": app.downloadProgress,
+      "lastTranscription": app.lastTranscription,
+      "error": app.error as Any,
+      "selectedModel": app.settings.selectedModel,
+      "selectedModelDisplayName": entry?.displayName ?? app.settings.selectedModel,
+      "outputLanguage": app.settings.outputLanguage as Any,
+      "modelsDownloaded": app.downloadedModels.count,
+      "modelsAvailable": app.availableModels.count,
     ]
 
     guard let data = try? JSONSerialization.data(withJSONObject: dict),
-          let json = String(data: data, encoding: .utf8) else {
-      return "{}"
-    }
+          let json = String(data: data, encoding: .utf8) else { return "{}" }
     return json
   }
 
-  static func modelsJSON(from store: StoreOf<LinuxApp>) -> String {
-    let state = store.state
+  static func modelsJSON(_ app: AppModel) -> String {
     let registry = GGMLModelManifest.bundled()
-
     var models: [[String: Any]] = []
-    for model in state.availableModels {
+    for model in app.availableModels {
       let entry = registry.first { $0.name == model }
-      let isDownloaded = state.downloadedModels.contains(model)
-      let isSelected = state.hexSettings.selectedModel == model
-
+      let isDownloaded = app.downloadedModels.contains(model)
+      let isSelected = app.settings.selectedModel == model
       models.append([
         "name": model,
         "displayName": entry?.displayName ?? model,
@@ -52,17 +45,10 @@ enum WebBridge {
         "isSelected": isSelected,
       ])
     }
-
     let dict: [String: Any] = ["models": models]
     guard let data = try? JSONSerialization.data(withJSONObject: dict),
-          let json = String(data: data, encoding: .utf8) else {
-      return "{}"
-    }
+          let json = String(data: data, encoding: .utf8) else { return "{}" }
     return json
-  }
-
-  static func historyJSON(from store: StoreOf<LinuxApp>) -> String {
-    return "[]"
   }
 
   private static func humanReadableSize(_ bytes: Int64) -> String {

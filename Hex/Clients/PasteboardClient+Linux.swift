@@ -1,5 +1,4 @@
 #if !os(macOS)
-import ComposableArchitecture
 import Dependencies
 import DependenciesMacros
 import Foundation
@@ -32,8 +31,16 @@ extension DependencyValues {
     }
 }
 
-struct PasteboardClientLive {
-    @Shared(.hexSettings) var hexSettings: HexSettings
+  struct PasteboardClientLive {
+    var hexSettings: HexSettings {
+      get {
+        let url = configDir().appendingPathComponent("settings.json")
+        if let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(HexSettings.self, from: d) {
+          return s
+        }
+        return HexSettings()
+      }
+    }
 
     func paste(text: String) async {
         if hexSettings.useClipboardPaste {
@@ -168,5 +175,11 @@ struct PasteboardClientLive {
             }
         }
     }
+}
+
+private func configDir() -> URL {
+  let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
+    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config").path
+  return URL(fileURLWithPath: xdg).appendingPathComponent("hex", isDirectory: true)
 }
 #endif

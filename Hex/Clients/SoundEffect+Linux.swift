@@ -1,5 +1,4 @@
 #if !os(macOS)
-import ComposableArchitecture
 import Dependencies
 import DependenciesMacros
 import Foundation
@@ -60,10 +59,17 @@ actor SoundEffectsClientLive {
   private let logger = HexLog.sound
   private let baselineVolume = HexSettings.baseSoundEffectsVolume
 
-  @Shared(.hexSettings) var hexSettings: HexSettings
   private var soundPaths: [SoundEffect: String] = [:]
   private var isEnabled = true
   private var currentProcesses: [SoundEffect: Process] = [:]
+
+  private var hexSettings: HexSettings {
+    let url = configDir().appendingPathComponent("settings.json")
+    if let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(HexSettings.self, from: d) {
+      return s
+    }
+    return HexSettings()
+  }
 
   func play(_ soundEffect: SoundEffect) {
     guard hexSettings.soundEffectsEnabled else { return }
@@ -127,5 +133,13 @@ actor SoundEffectsClientLive {
       stopAll()
     }
   }
+}
+#endif
+
+#if !os(macOS)
+private func configDir() -> URL {
+  let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
+    ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config").path
+  return URL(fileURLWithPath: xdg).appendingPathComponent("hex", isDirectory: true)
 }
 #endif
