@@ -3,22 +3,6 @@ import Foundation
 import HexCore
 import Logging
 
-// MARK: - Formatting
-
-private func humanReadableSize(_ bytes: Int64) -> String {
-  if bytes < 1024 { return "\(bytes)B" }
-  if bytes < 1024 * 1024 { return String(format: "%.1fKB", Double(bytes) / 1024) }
-  if bytes < 1024 * 1024 * 1024 { return String(format: "%.1fMB", Double(bytes) / (1024 * 1024)) }
-  return String(format: "%.2fGB", Double(bytes) / (1024 * 1024 * 1024))
-}
-
-private func progressBar(fraction: Double, width: Int = 30) -> String {
-  let filled = Int(Double(width) * max(0, min(1, fraction)))
-  return "[" + String(repeating: "=", count: filled) + String(repeating: " ", count: width - filled) + "]"
-}
-
-// MARK: - Entry Point
-
 @main
 struct HexLinux {
   static func main() async {
@@ -61,7 +45,7 @@ struct HexLinux {
     }
 
     Task {
-      let monitor = await KeyEventMonitorClientLive()
+      let monitor = KeyEventMonitorClientLive()
       await monitor.startDaemonMonitoring(socketPath: daemonSocketPath)
     }
 
@@ -97,7 +81,7 @@ struct HexLinux {
         for m in app.availableModels {
           let dl = app.downloadedModels.contains(m) ? "✓" : " "
           let entry = reg.first { $0.name == m }
-          print("  [\(dl)] \(m)  \(entry.map { humanReadableSize($0.sizeBytes) } ?? "?")")
+          print("  [\(dl)] \(m)  \(entry.map { Self.humanReadableSize($0.sizeBytes) } ?? "?")")
         }
 
       case "fetch":
@@ -111,7 +95,7 @@ struct HexLinux {
           await app.downloadModel(name)
           while app.isDownloading {
             let pct = Int(app.downloadProgress * 100)
-            print("\r  \(progressBar(fraction: app.downloadProgress)) \(pct)%", terminator: "")
+            print("\r  \(Self.bar(f: app.downloadProgress)) \(pct)%", terminator: "")
             fflush(stdout)
             try? await Task.sleep(nanoseconds: 500_000_000)
           }
@@ -158,6 +142,18 @@ struct HexLinux {
     p.standardOutput = FileHandle.nullDevice
     p.standardError = FileHandle.nullDevice
     try? p.run()
+  }
+
+  private static func humanReadableSize(_ bytes: Int64) -> String {
+    if bytes < 1024 { return "\(bytes)B" }
+    if bytes < 1024 * 1024 { return String(format: "%.1fKB", Double(bytes) / 1024) }
+    if bytes < 1024 * 1024 * 1024 { return String(format: "%.1fMB", Double(bytes) / (1024 * 1024)) }
+    return String(format: "%.2fGB", Double(bytes) / (1024 * 1024 * 1024))
+  }
+
+  private static func bar(_ f: Double, _ w: Int = 30) -> String {
+    let n = Int(Double(w) * max(0, min(1, f)))
+    return "[" + String(repeating: "=", count: n) + String(repeating: " ", count: w - n) + "]"
   }
 }
 #endif

@@ -13,7 +13,7 @@ enum WebBridge {
       "isDownloading": app.isDownloading,
       "downloadProgress": app.downloadProgress,
       "lastTranscription": app.lastTranscription,
-      "error": app.error as Any,
+      "error": app.lastError as Any,
       "selectedModel": app.settings.selectedModel,
       "selectedModelDisplayName": entry?.displayName ?? app.settings.selectedModel,
       "outputLanguage": app.settings.outputLanguage as Any,

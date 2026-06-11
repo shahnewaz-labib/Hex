@@ -1,10 +1,12 @@
 #if !os(macOS)
+#if canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 import HexCore
 
-private let logger = HexLog.hotKey
+private let daemonLogger = HexLog.hotKey
 
-// Shared constants
 private let MOD_SHIFT: UInt16 = 0x01
 private let MOD_CONTROL: UInt16 = 0x04
 private let MOD_ALT: UInt16 = 0x08
@@ -19,9 +21,10 @@ private let KEY_RIGHTALT: UInt16 = 100
 private let KEY_RIGHTMETA: UInt16 = 126
 private let EV_KEY: UInt16 = 1
 
-private let EVIOCGNAME: @convention(c) (Int32) -> UInt = { _ in
-  UInt(0x4500) + ((256 << 16) | 1)
-}()
+private func EVIOCGNAME(_ len: Int32) -> UInt {
+  let base: UInt = 0x4500
+  return base + UInt(((UInt(len) & 0x1fff) << 16) | 0x01)
+}
 
 private struct input_event {
   var time: timeval = timeval()
@@ -38,12 +41,12 @@ private struct timeval {
 func runHotkeyDaemon(hotkey: HotKey, minimumKeyTime: TimeInterval, socketPath: String) throws {
   unlink(socketPath)
 
-  let serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
+  let serverFD = socket(AF_UNIX, Int32(SOCK_STREAM), 0)
   guard serverFD >= 0 else { throw NSError(domain: "hexd", code: 1, userInfo: [NSLocalizedDescriptionKey: "socket failed"]) }
 
   var addr = sockaddr_un()
   addr.sun_family = sa_family_t(AF_UNIX)
-  socketPath.withCString { strcpy(&addr.sun_path.0, $0) }
+  _ = socketPath.withCString { strcpy(&addr.sun_path.0, $0) }
 
   let addrPtr = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 } }
   guard bind(serverFD, addrPtr, socklen_t(MemoryLayout<sockaddr_un>.size)) >= 0 else {
@@ -53,18 +56,18 @@ func runHotkeyDaemon(hotkey: HotKey, minimumKeyTime: TimeInterval, socketPath: S
     close(serverFD); throw NSError(domain: "hexd", code: 3, userInfo: [NSLocalizedDescriptionKey: "listen failed"])
   }
 
-  logger.info("Hotkey daemon on \(socketPath)")
+  daemonLogger.info("Hotkey daemon on \(socketPath)")
 
   let clientFD = accept(serverFD, nil, nil)
   guard clientFD >= 0 else {
     close(serverFD); throw NSError(domain: "hexd", code: 4, userInfo: [NSLocalizedDescriptionKey: "accept failed"])
   }
 
-  logger.info("Client connected")
+  daemonLogger.info("Client connected")
 
   let fds = openKeyboards()
   if fds.isEmpty {
-    logger.error("No keyboards found. Run: sudo usermod -a -G input $USER && newgrp input")
+    daemonLogger.error("No keyboards found. Run: sudo usermod -a -G input $USER && newgrp input")
     close(clientFD); close(serverFD); unlink(socketPath)
     return
   }
@@ -126,7 +129,7 @@ func runHotkeyDaemon(hotkey: HotKey, minimumKeyTime: TimeInterval, socketPath: S
       }
       _ = cmd.withUTF8 { buf in write(clientFD, buf.baseAddress!, buf.count) }
       _ = write(clientFD, "\n", 1)
-      logger.info("Sent: \(cmd)")
+      daemonLogger.info("Sent: \(cmd)")
     }
   }
 }
@@ -139,11 +142,12 @@ private func openKeyboards() -> [Int32] {
     let fd = open(path, O_RDONLY | O_NONBLOCK)
     guard fd >= 0 else { continue }
     var name = [CChar](repeating: 0, count: 256)
-    ioctl(fd, UInt(EVIOCGNAME(256)), &name)
-    let devName = String(cString: name).lowercased()
+    _ = ioctl(fd, EVIOCGNAME(256), &name)
+    let devName = (String(decoding: name.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+      .components(separatedBy: "\0").first ?? "").lowercased()
     if devName.contains("keyboard") || devName.contains("key") {
       fds.append(fd)
-      logger.info("Keyboard: \(devName)")
+      daemonLogger.info("Keyboard: \(devName)")
     } else { close(fd) }
   }
   return fds

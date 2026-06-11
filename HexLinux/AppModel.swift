@@ -2,7 +2,9 @@
 import Foundation
 import HexCore
 import Logging
+import Observation
 
+@available(macOS 14.0, *)
 @Observable
 final class AppModel: @unchecked Sendable {
   var isRecording = false
@@ -10,7 +12,7 @@ final class AppModel: @unchecked Sendable {
   var isDownloading = false
   var downloadProgress: Double = 0
   var lastTranscription = ""
-  var error: String?
+  var lastError: String?
   var recordingStartTime: Date?
   var downloadedModels: [String] = []
   var availableModels: [String] = []
@@ -55,7 +57,7 @@ final class AppModel: @unchecked Sendable {
       await handleRecordingStopped(url)
     } else {
       lastTranscription = ""
-      error = nil
+      lastError = nil
       recordingStartTime = Date()
       await RecordingClient.liveValue.startRecording()
       isRecording = true
@@ -67,10 +69,10 @@ final class AppModel: @unchecked Sendable {
       let text = try await TranscriptionClient.liveValue.transcribe(url, settings.outputLanguage, settings.selectedModel)
       isTranscribing = false
       lastTranscription = text
-      error = nil
-    } catch {
+      lastError = nil
+    } catch let err {
       isTranscribing = false
-      error = error.localizedDescription
+      lastError = err.localizedDescription
     }
   }
 
@@ -88,7 +90,7 @@ final class AppModel: @unchecked Sendable {
   func downloadModel(_ name: String) async {
     isDownloading = true
     downloadProgress = 0
-    error = nil
+    lastError = nil
     do {
       try await TranscriptionClient.liveValue.downloadModel(name) { [weak self] fraction in
         Task { @MainActor [weak self] in
@@ -101,10 +103,10 @@ final class AppModel: @unchecked Sendable {
         downloadedModels.append(name)
       }
       await fetchModels()
-    } catch {
+    } catch let err {
       isDownloading = false
       downloadProgress = 0
-      self.error = error.localizedDescription
+      self.lastError = err.localizedDescription
     }
   }
 
@@ -112,8 +114,8 @@ final class AppModel: @unchecked Sendable {
     do {
       try await TranscriptionClient.liveValue.deleteModel(name)
       await fetchModels()
-    } catch {
-      self.error = error.localizedDescription
+    } catch let err {
+      self.lastError = err.localizedDescription
     }
   }
 
