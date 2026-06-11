@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "HexCore", targets: ["HexCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/Clipy/Sauce", branch: "master"),
+        .package(url: "https://github.com/Clipy/Sauce", from: "2.5.0"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.11.0"),
         .package(url: "https://github.com/apple/swift-log", from: "1.9.1"),
     ],
@@ -21,7 +21,7 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Logging", package: "swift-log"),
-                .target(name: "Sauce", condition: .when(platforms: [.macOS])),
+                .product(name: "Sauce", package: "Sauce", condition: .when(platforms: [.macOS])),
             ],
             path: "Sources/HexCore",
             linkerSettings: [

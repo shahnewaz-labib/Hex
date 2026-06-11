@@ -267,6 +267,28 @@ struct HexLinux {
       return
     }
 
+    let daemonSocketPath = "/tmp/hex-hotkey.sock"
+    var daemonProcess: Process?
+
+    let hotkeyDaemonPath = "/usr/bin/env"
+    if FileManager.default.fileExists(atPath: "\(installPrefix())/bin/hex-hotkeyd") {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "\(installPrefix())/bin/hex-hotkeyd")
+      let keyStr = store.state.hexSettings.hotkey.key?.rawValue ?? "nil"
+      let modStr = store.state.hexSettings.hotkey.modifiers.sorted.map(\.kind.rawValue).joined(separator: ",")
+      process.arguments = [daemonSocketPath, keyStr, modStr, String(store.state.hexSettings.minimumKeyTime)]
+      process.standardOutput = FileHandle.nullDevice
+      process.standardError = FileHandle.nullDevice
+      try? process.run()
+      daemonProcess = process
+      logger.info("Hotkey daemon started: key=\(keyStr) mods=\(modStr)")
+    }
+
+    @Dependency(\.keyEventMonitor) var keyEventMonitor
+    Task {
+      await keyEventMonitor.startDaemonMonitoring(daemonSocketPath)
+    }
+
     openBrowser("http://127.0.0.1:8765")
 
     print("""
@@ -363,9 +385,19 @@ struct HexLinux {
 
     let _ = await readLoop.result
 
+    daemonProcess?.terminate()
     await server.stop()
     logger.info("Hex Linux exiting.")
     print("Goodbye!")
+  }
+
+  static func installPrefix() -> String {
+    if let env = ProcessInfo.processInfo.environment["HEX_INSTALL_PREFIX"] {
+      return env
+    }
+    return FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".local")
+      .path
   }
 
   static func openBrowser(_ url: String) {
